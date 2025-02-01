@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NES Snake Battle</title>
+    <!-- Add NES.css -->
+    <link href="https://unpkg.com/nes.css@latest/css/nes.min.css" rel="stylesheet" />
+    <!-- Add Press Start 2P font -->
+    <link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="console-container">
+        <div class="nes-container with-title is-centered console-body">
+            <p class="title">SNAKE BATTLE</p>
+            <div class="screen-container">
+                <div class="screen-frame nes-container is-dark">
+                    <div class="game-header">
+                        <span class="nes-text is-success">P1: <span id="score">0</span></span>
+                        <span class="vs">VS</span>
+                        <span class="nes-text is-primary">P2: <span id="score2">0</span></span>
+                    </div>
+                    <canvas id="gameCanvas"></canvas>
+                    <div class="game-message">
+                        <p class="nes-text is-success">P1: Arrow Keys</p>
+                        <p class="nes-text is-primary">P2: WASD</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="controls-section">
+                <div class="player-controls">
+                    <div class="nes-container is-dark">
+                        <p class="nes-text is-success">Player 1</p>
+                        <p>↑↓←→</p>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button id="startButton" class="nes-btn is-success">START BATTLE</button>
+                    <button class="nes-btn is-error" onclick="resetGame()">RESET</button>
+                </div>
+                <div class="player-controls">
+                    <div class="nes-container is-dark">
+                        <p class="nes-text is-primary">Player 2</p>
+                        <p>WASD</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="console-footer">
+            <i class="nes-mario"></i>
+            <p class="nes-text">SNAKE BATTLE 2024</p>
+            <i class="nes-ash"></i>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html> 
