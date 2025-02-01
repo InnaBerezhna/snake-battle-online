@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NES Snake Battle</title>
+    <title>NES Snake Battle Online</title>
     <!-- Add NES.css -->
     <link href="https://unpkg.com/nes.css@latest/css/nes.min.css" rel="stylesheet" />
     <!-- Add Press Start 2P font -->
@@ -13,37 +13,39 @@
 <body>
     <div class="console-container">
         <div class="nes-container with-title is-centered console-body">
-            <p class="title">SNAKE BATTLE</p>
-            <div class="screen-container">
-                <div class="screen-frame nes-container is-dark">
-                    <div class="game-header">
-                        <span class="nes-text is-success">P1: <span id="score">0</span></span>
-                        <span class="vs">VS</span>
-                        <span class="nes-text is-primary">P2: <span id="score2">0</span></span>
-                    </div>
-                    <canvas id="gameCanvas"></canvas>
-                    <div class="game-message">
-                        <p class="nes-text is-success">P1: Arrow Keys</p>
-                        <p class="nes-text is-primary">P2: WASD</p>
-                    </div>
+            <p class="title">SNAKE BATTLE ONLINE</p>
+            
+            <!-- Lobby Screen -->
+            <div id="lobbyScreen" class="lobby-screen">
+                <p class="nes-text is-primary">Waiting for opponent...</p>
+                <i class="nes-icon coin is-large is-rotating"></i>
+                <div class="player-status">
+                    <p class="nes-text">Players in lobby: <span id="playerCount">1</span>/2</p>
                 </div>
             </div>
-            
-            <div class="controls-section">
-                <div class="player-controls">
-                    <div class="nes-container is-dark">
-                        <p class="nes-text is-success">Player 1</p>
-                        <p>↑↓←→</p>
+
+            <!-- Game Screen -->
+            <div id="gameScreen" class="game-screen" style="display: none;">
+                <div class="screen-container">
+                    <div class="screen-frame nes-container is-dark">
+                        <div class="game-header">
+                            <span class="nes-text is-success">YOU: <span id="score">0</span></span>
+                            <span class="vs">VS</span>
+                            <span class="nes-text is-error">OPPONENT: <span id="score2">0</span></span>
+                        </div>
+                        <canvas id="gameCanvas"></canvas>
+                        <div class="game-message">
+                            <p class="nes-text is-warning">Use Arrow Keys to move</p>
+                        </div>
                     </div>
                 </div>
-                <div class="action-buttons">
-                    <button id="startButton" class="nes-btn is-success">START BATTLE</button>
-                    <button class="nes-btn is-error" onclick="resetGame()">RESET</button>
-                </div>
-                <div class="player-controls">
-                    <div class="nes-container is-dark">
-                        <p class="nes-text is-primary">Player 2</p>
-                        <p>WASD</p>
+                
+                <div class="controls-section">
+                    <div class="ready-status">
+                        <p id="playerStatus" class="nes-text">Waiting for both players...</p>
+                    </div>
+                    <div class="action-buttons">
+                        <button id="startButton" class="nes-btn is-success">READY!</button>
                     </div>
                 </div>
             </div>
@@ -51,10 +53,11 @@
         
         <div class="console-footer">
             <i class="nes-mario"></i>
-            <p class="nes-text">SNAKE BATTLE 2024</p>
+            <p class="nes-text">SNAKE BATTLE ONLINE 2024</p>
             <i class="nes-ash"></i>
         </div>
     </div>
+    <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
 </body>
 </html> 

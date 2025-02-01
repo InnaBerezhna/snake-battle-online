@@ -1,7 +1,16 @@
+// Connect to Socket.io server
+const socket = io();
+
+// Game elements
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const startButton = document.getElementById('startButton');
 const scoreElement = document.getElementById('score');
+const score2Element = document.getElementById('score2');
+const lobbyScreen = document.getElementById('lobbyScreen');
+const gameScreen = document.getElementById('gameScreen');
+const playerCount = document.getElementById('playerCount');
+const playerStatus = document.getElementById('playerStatus');
 
 // Set canvas size
 canvas.width = 400;
@@ -10,123 +19,179 @@ canvas.height = 400;
 // Game constants
 const gridSize = 20;
 const tileCount = canvas.width / gridSize;
-const INITIAL_SPEED = 4; // Slower initial speed
-const SPEED_INCREASE = 1.5; // 10% increase
-const PIECES_FOR_SPEEDUP = 3; // Speed up every 5 pieces
+const INITIAL_SPEED = 4;
 
 // Game state
-let score1 = 0;
-let score2 = 0;
-let speed = INITIAL_SPEED;
-let piecesEaten = 0;
+let roomId = null;
+let isPlayer1 = false;
+let gameRunning = false;
+let playerReady = false;
+let score = 0;
+let opponentScore = 0;
 
-// Snake 1 (Player 1 - Arrow keys)
-let snake1 = [{ x: 5, y: 5 }];
-let dx1 = 0;
-let dy1 = 0;
-
-// Snake 2 (Player 2 - WASD keys)
-let snake2 = [{ x: 15, y: 15 }];
-let dx2 = 0;
-let dy2 = 0;
-
+// Snake states
+let mySnake = [{ x: 5, y: 5 }];
+let opponentSnake = [{ x: 15, y: 15 }];
+let dx = 0;
+let dy = 0;
+let opponentDx = 0;
+let opponentDy = 0;
 let food = { x: 10, y: 10 };
 let gameInterval;
-let gameRunning = false;
 
 // Game controls
 document.addEventListener('keydown', handleKeyPress);
-startButton.addEventListener('click', toggleGame);
+startButton.addEventListener('click', handleReady);
 
-function handleKeyPress(event) {
-    const key = event.key;
+// Socket event handlers
+socket.on('connect', () => {
+    console.log('Connected to server');
+    socket.emit('findGame');
+});
+
+socket.on('waitingForPlayer', () => {
+    lobbyScreen.style.display = 'block';
+    gameScreen.style.display = 'none';
+    playerCount.textContent = '1';
+});
+
+socket.on('gameFound', (data) => {
+    roomId = data.roomId;
+    isPlayer1 = data.players[0] === socket.id;
     
-    // Player 1 controls (Arrow keys)
-    if (key === 'ArrowUp' && dy1 === 0) {
-        dx1 = 0;
-        dy1 = -1;
-    } else if (key === 'ArrowDown' && dy1 === 0) {
-        dx1 = 0;
-        dy1 = 1;
-    } else if (key === 'ArrowLeft' && dx1 === 0) {
-        dx1 = -1;
-        dy1 = 0;
-    } else if (key === 'ArrowRight' && dx1 === 0) {
-        dx1 = 1;
-        dy1 = 0;
+    // Show game screen
+    lobbyScreen.style.display = 'none';
+    gameScreen.style.display = 'block';
+    
+    // Initialize positions based on player number
+    if (isPlayer1) {
+        mySnake = [{ x: 5, y: 5 }];
+        opponentSnake = [{ x: 15, y: 15 }];
+    } else {
+        mySnake = [{ x: 15, y: 15 }];
+        opponentSnake = [{ x: 5, y: 5 }];
     }
     
-    // Player 2 controls (WASD)
-    if (key === 'w' && dy2 === 0) {
-        dx2 = 0;
-        dy2 = -1;
-    } else if (key === 's' && dy2 === 0) {
-        dx2 = 0;
-        dy2 = 1;
-    } else if (key === 'a' && dx2 === 0) {
-        dx2 = -1;
-        dy2 = 0;
-    } else if (key === 'd' && dx2 === 0) {
-        dx2 = 1;
-        dy2 = 0;
+    playerStatus.textContent = 'Press READY when you want to start!';
+    startButton.disabled = false;
+});
+
+socket.on('playerReadyUpdate', (data) => {
+    playerStatus.textContent = `Players ready: ${data.readyPlayers}/2`;
+});
+
+socket.on('gameStart', (data) => {
+    food = data.initialFood;
+    gameRunning = true;
+    startButton.style.display = 'none';
+    playerStatus.textContent = 'Game Started! Good luck!';
+    startGame();
+});
+
+socket.on('opponentMove', (data) => {
+    opponentDx = data.dx;
+    opponentDy = data.dy;
+});
+
+socket.on('gameStateUpdate', (state) => {
+    food = state.food;
+    if (isPlayer1) {
+        score = state.score1;
+        opponentScore = state.score2;
+    } else {
+        score = state.score2;
+        opponentScore = state.score1;
+    }
+    updateScore();
+});
+
+socket.on('opponentDisconnected', () => {
+    alert('Opponent disconnected!');
+    resetGame();
+    socket.emit('findGame');
+});
+
+socket.on('gameEnded', (data) => {
+    const isWinner = (isPlayer1 && data.winner === 'player1') || (!isPlayer1 && data.winner === 'player2');
+    const message = isWinner ? 'You won!' : 'Game Over!';
+    alert(`${message}\nFinal Score:\nYou: ${score}\nOpponent: ${opponentScore}`);
+    resetGame();
+    socket.emit('findGame');
+});
+
+function handleReady() {
+    if (!playerReady) {
+        playerReady = true;
+        startButton.disabled = true;
+        playerStatus.textContent = 'Waiting for opponent...';
+        socket.emit('playerReady');
     }
 }
 
-function toggleGame() {
-    if (gameRunning) {
-        clearInterval(gameInterval);
-        startButton.textContent = 'Start Game';
-    } else {
-        resetGame();
-        gameInterval = setInterval(gameLoop, 1000 / speed);
-        startButton.textContent = 'Stop Game';
+function handleKeyPress(event) {
+    if (!gameRunning) return;
+    
+    const key = event.key;
+    let newDx = dx;
+    let newDy = dy;
+    
+    if (key === 'ArrowUp' && dy === 0) {
+        newDx = 0;
+        newDy = -1;
+    } else if (key === 'ArrowDown' && dy === 0) {
+        newDx = 0;
+        newDy = 1;
+    } else if (key === 'ArrowLeft' && dx === 0) {
+        newDx = -1;
+        newDy = 0;
+    } else if (key === 'ArrowRight' && dx === 0) {
+        newDx = 1;
+        newDy = 0;
     }
-    gameRunning = !gameRunning;
+    
+    if (newDx !== dx || newDy !== dy) {
+        dx = newDx;
+        dy = newDy;
+        socket.emit('playerMove', { dx, dy });
+    }
+}
+
+function startGame() {
+    gameInterval = setInterval(gameLoop, 1000 / INITIAL_SPEED);
 }
 
 function resetGame() {
-    snake1 = [{ x: 5, y: 5 }];
-    snake2 = [{ x: 15, y: 15 }];
-    dx1 = 0;
-    dy1 = 0;
-    dx2 = 0;
-    dy2 = 0;
-    score1 = 0;
-    score2 = 0;
-    speed = INITIAL_SPEED;
-    piecesEaten = 0;
-    placeFood();
+    clearInterval(gameInterval);
+    gameRunning = false;
+    playerReady = false;
+    dx = 0;
+    dy = 0;
+    opponentDx = 0;
+    opponentDy = 0;
+    score = 0;
+    opponentScore = 0;
     updateScore();
+    startButton.disabled = false;
+    startButton.style.display = 'block';
+    startButton.textContent = 'READY!';
 }
 
 function updateScore() {
-    scoreElement.textContent = `P1: ${score1} | P2: ${score2}`;
+    scoreElement.textContent = score;
+    score2Element.textContent = opponentScore;
 }
 
 function gameLoop() {
-    moveSnake(snake1, dx1, dy1);
-    moveSnake(snake2, dx2, dy2);
+    moveSnake(mySnake, dx, dy);
+    moveSnake(opponentSnake, opponentDx, opponentDy);
     
-    // Check collisions for both snakes
-    if (checkSelfCollision(snake1)) {
-        endGame("Player 1");
-        return;
-    }
-    if (checkSelfCollision(snake2)) {
-        endGame("Player 2");
+    if (checkSelfCollision(mySnake)) {
+        socket.emit('gameOver');
         return;
     }
     
     checkFood();
     draw();
-}
-
-function endGame(losingPlayer) {
-    clearInterval(gameInterval);
-    const winner = score1 > score2 ? "Player 1" : score2 > score1 ? "Player 2" : "It's a tie";
-    alert(`${losingPlayer} hit themselves!\nGame Over!\nFinal Score:\nPlayer 1: ${score1}\nPlayer 2: ${score2}\n${winner} wins!`);
-    gameRunning = false;
-    startButton.textContent = 'Start Game';
 }
 
 function moveSnake(snake, dx, dy) {
@@ -137,15 +202,12 @@ function moveSnake(snake, dx, dy) {
     head.y = (head.y + tileCount) % tileCount;
     
     snake.unshift(head);
-    if (!checkFood()) {
-        snake.pop();
-    }
+    snake.pop();
 }
 
 function checkSelfCollision(snake) {
     const head = snake[0];
     
-    // Only check for self collision
     for (let i = 1; i < snake.length; i++) {
         if (head.x === snake[i].x && head.y === snake[i].y) {
             return true;
@@ -156,47 +218,12 @@ function checkSelfCollision(snake) {
 }
 
 function checkFood() {
-    // Check both snakes for food collision
-    const head1 = snake1[0];
-    const head2 = snake2[0];
+    const head = mySnake[0];
     
-    if (head1.x === food.x && head1.y === food.y) {
-        score1 += 10;
-        piecesEaten++;
-        updateScore();
-        placeFood();
-        return true;
+    if (head.x === food.x && head.y === food.y) {
+        mySnake.push({});
+        socket.emit('foodCollected');
     }
-    
-    if (head2.x === food.x && head2.y === food.y) {
-        score2 += 10;
-        piecesEaten++;
-        updateScore();
-        placeFood();
-        return true;
-    }
-    
-    return false;
-}
-
-function placeFood() {
-    food = {
-        x: Math.floor(Math.random() * tileCount),
-        y: Math.floor(Math.random() * tileCount)
-    };
-    
-    // Make sure food doesn't appear on either snake
-    const checkSnake = (snake) => {
-        for (let segment of snake) {
-            if (food.x === segment.x && food.y === segment.y) {
-                placeFood();
-                return;
-            }
-        }
-    };
-    
-    checkSnake(snake1);
-    checkSnake(snake2);
 }
 
 function draw() {
@@ -218,28 +245,17 @@ function draw() {
         ctx.stroke();
     }
     
-    // Draw snake 1 (Green)
-    drawSnake(snake1, '#39ff14', '#85ff85', dx1, dy1);
+    // Draw my snake (Green)
+    drawSnake(mySnake, '#39ff14', '#85ff85', dx, dy);
     
-    // Draw snake 2 (Blue)
-    drawSnake(snake2, '#00ffff', '#99ffff', dx2, dy2);
+    // Draw opponent snake (Red)
+    drawSnake(opponentSnake, '#ff3366', '#ff99aa', opponentDx, opponentDy);
     
     // Draw food
     const foodX = food.x * gridSize;
     const foodY = food.y * gridSize;
-    
-    // Main apple shape
-    ctx.fillStyle = '#ff0000';
-    ctx.fillRect(foodX + 4, foodY + 2, gridSize - 8, gridSize - 4);
-    ctx.fillRect(foodX + 2, foodY + 4, gridSize - 4, gridSize - 8);
-    
-    // Shine details
-    ctx.fillStyle = '#ff9999';
-    ctx.fillRect(foodX + 4, foodY + 4, 3, 3);
-    
-    // Leaf
-    ctx.fillStyle = '#00ff00';
-    ctx.fillRect(foodX + gridSize - 8, foodY + 2, 4, 4);
+    ctx.fillStyle = '#ffd700';
+    ctx.fillRect(foodX + 2, foodY + 2, gridSize - 4, gridSize - 4);
 }
 
 function drawSnake(snake, mainColor, eyeColor, dx, dy) {
@@ -253,19 +269,21 @@ function drawSnake(snake, mainColor, eyeColor, dx, dy) {
             gridSize - 4
         );
         
-        // Pixel art details
-        if (index === 0) { // Head
+        // Head details
+        if (index === 0) {
             ctx.fillStyle = eyeColor;
-            // Eyes
             const eyeSize = 3;
             const eyeOffset = dx !== 0 ? 4 : 3;
+            
+            // Draw eyes based on direction
             ctx.fillRect(
                 segment.x * gridSize + (dx === 1 ? gridSize - 8 : 4),
                 segment.y * gridSize + eyeOffset,
                 eyeSize,
                 eyeSize
             );
-            if (dy === 0) { // Second eye only visible when moving horizontally
+            
+            if (dy === 0) {
                 ctx.fillRect(
                     segment.x * gridSize + (dx === 1 ? gridSize - 8 : 4),
                     segment.y * gridSize + gridSize - eyeOffset - eyeSize,
